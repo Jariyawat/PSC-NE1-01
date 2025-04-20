@@ -37,6 +37,9 @@
       max-width: 100%;
       margin-bottom: 20px;
     }
+    .rel-status {
+      color: red !important;
+    }
   </style>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -57,7 +60,7 @@
 
   <script>
     const spreadsheetId = '1JrSoITPYzD3Oy6UBmUCqUD5V5E5alZmR_wiCGpZV2d0';
-    const sheets = ['Sheet1', 'Sheet2', 'Sheet3'];
+    const sheets = ['Sheet1'];
 
     function init() {
       const tabs = document.getElementById('sheetTabs');
@@ -65,7 +68,7 @@
       sheets.forEach((sheetName, index) => {
         const tab = document.createElement('li');
         tab.className = 'nav-item';
-        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" data-bs-toggle="tab" onclick="openSheet('${sheetName}')">${sheetName}</button>`;
+        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" onclick="openSheet('${sheetName}')">${sheetName}</button>`;
         tabs.appendChild(tab);
 
         const content = document.createElement('div');
@@ -108,7 +111,12 @@
             scrollCollapse: true,
             fixedHeader: true,
             fixedColumns: { leftColumns: 2 },
-            responsive: true
+            responsive: true,
+            createdRow: function(row, data) {
+              if (data[3] === 'REL') {
+                $('td', row).addClass('rel-status');
+              }
+            }
           });
 
           $(`#search-${sheetName}`).off().on('keyup', function() {
@@ -118,35 +126,29 @@
           // Chart
           const ctx = document.getElementById(`chart-${sheetName}`).getContext('2d');
           const labels = rows.map(r => r[2]); // ชื่องาน
-          const dataset1 = rows.map(r => parseFloat(r[6]) || 0); // %Act.ชจ.หน้า
-          const dataset2 = rows.map(r => parseFloat(r[7]) || 0); // %Act.ค่าจ้าง
+          const dataset1 = rows.map(r => r[5]); // ผู้สมัคร
+          const dataset2 = rows.map(r => parseFloat(r[6]) || 0); // %Act.คชจ.หน้างาน
 
-          new Chart(ctx, {
+          const barChart = new Chart(ctx, {
             type: 'bar',
             data: {
               labels: labels,
               datasets: [
-                {
-                  label: '%Act.ชจ.หน้าที่งาน',
-                  data: dataset1,
-                  backgroundColor: 'rgba(54, 162, 235, 0.6)'
-                },
-                {
-                  label: '%Act.ค่าจ้างแรง',
-                  data: dataset2,
-                  backgroundColor: 'rgba(255, 99, 132, 0.6)'
-                }
+                { label: 'ผู้สมัคร', data: dataset1, backgroundColor: 'rgba(255, 159, 64, 0.6)' },
+                { label: '%Act.คชจ.หน้างาน', data: dataset2, backgroundColor: 'rgba(75, 192, 192, 0.6)' }
               ]
             },
             options: {
               responsive: true,
               plugins: {
-                title: { display: true, text: `เปรียบเทียบค่างาน - ${sheetName}` },
+                title: { display: true, text: `เปรียบเทียบ ผู้สมัคร กับ % คชจ.หน้างาน (${sheetName})` },
                 legend: { position: 'top' }
               },
-              scales: {
-                x: { ticks: { autoSkip: true, maxRotation: 90, minRotation: 30 } },
-                y: { beginAtZero: true }
+              onClick: (e, elements) => {
+                if (elements.length > 0) {
+                  const index = elements[0].index;
+                  table.search(labels[index]).draw();
+                }
               }
             }
           });
