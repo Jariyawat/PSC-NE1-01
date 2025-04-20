@@ -1,13 +1,14 @@
+
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Dashboard จาก Google Sheet</title>
+  <title>ระบบบริหารจัดงานงานก่อสร้าง ผกร.กรย.ฉ.1</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <style>
     body {
-      background-color: #f0f2f5;
+      background-color: #f8f9fa;
       font-family: 'Segoe UI', sans-serif;
     }
     header {
@@ -16,24 +17,22 @@
       padding: 20px;
       text-align: center;
     }
-    .tab-button {
-      cursor: pointer;
-    }
-    .tabcontent {
-      display: none;
-    }
-    .tabcontent.active {
-      display: block;
-    }
     .search-box {
       margin: 15px 0;
     }
+    canvas {
+      max-width: 100%;
+      margin-top: 20px;
+    }
   </style>
-  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
   <header>
-    <h1><i class="fas fa-chart-bar"></i> Dashboard ข้อมูลจาก Google Sheet</h1>
+    <h1><i class="fas fa-chart-bar"></i> ระบบบริหารจัดงานงานก่อสร้าง ผกร.กรย.ฉ.1</h1>
   </header>
 
   <div class="container mt-4">
@@ -53,83 +52,77 @@
       const contents = document.getElementById('sheetContents');
 
       sheets.forEach((sheetName, index) => {
-        // สร้าง Tab
         const tab = document.createElement('li');
         tab.className = 'nav-item';
-        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''} tab-button" data-sheet="${sheetName}">${sheetName}</button>`;
+        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" data-bs-toggle="tab" onclick="openSheet('${sheetName}')">${sheetName}</button>`;
         tabs.appendChild(tab);
 
-        // สร้าง Content
         const content = document.createElement('div');
         content.id = sheetName;
         content.className = `tabcontent ${index === 0 ? 'active' : ''}`;
         content.innerHTML = `
-          <input type="text" class="form-control search-box" placeholder="ค้นหา..." onkeyup="filterTable(event, '${sheetName}')">
-          <div id="table-${sheetName}"></div>
+          <div class="search-box">
+            <input type="text" id="search-${sheetName}" class="form-control" placeholder="ค้นหาในตารางนี้...">
+          </div>
+          <table id="table-${sheetName}" class="display" style="width:100%"></table>
+          <canvas id="chart-${sheetName}"></canvas>
         `;
         contents.appendChild(content);
       });
 
-      document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-          e.target.classList.add('active');
-          const sheet = e.target.dataset.sheet;
-          document.querySelectorAll('.tabcontent').forEach(c => c.classList.remove('active'));
-          document.getElementById(sheet).classList.add('active');
-          drawTable(sheet);
-        });
-      });
-
-      drawTable(sheets[0]); // initial load
+      openSheet(sheets[0]);
     }
 
-    const tableCache = {};
+    function openSheet(sheetName) {
+      document.querySelectorAll('.tabcontent').forEach(el => el.style.display = 'none');
+      document.getElementById(sheetName).style.display = 'block';
+      drawTable(sheetName);
+    }
 
     function drawTable(sheetName) {
-      const query = new google.visualization.Query(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=${sheetName}`);
-      query.send(response => {
-        if (response.isError()) {
-          document.getElementById(`table-${sheetName}`).innerHTML = `<p class="text-danger">${response.getMessage()}</p>`;
-          return;
-        }
-        const data = response.getDataTable();
-        const table = new google.visualization.Table(document.getElementById(`table-${sheetName}`));
-        table.draw(data, {showRowNumber: true, width: '100%', height: 'auto'});
-        tableCache[sheetName] = data;
-      });
-    }
+      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=${sheetName}`;
+      fetch(url)
+        .then(res => res.text())
+        .then(rep => {
+          const json = JSON.parse(rep.substring(47).slice(0, -2));
+          const cols = json.table.cols.map(col => ({ title: col.label }));
+          const rows = json.table.rows.map(row => row.c.map(cell => cell ? cell.v : ''));
 
-    function filterTable(event, sheetName) {
-      const search = event.target.value.toLowerCase();
-      const data = tableCache[sheetName];
-      if (!data) return;
+          const table = $(`#table-${sheetName}`).DataTable({
+            destroy: true,
+            data: rows,
+            columns: cols,
+            scrollX: true
+          });
 
-      const filteredData = new google.visualization.DataTable();
-      for (let col = 0; col < data.getNumberOfColumns(); col++) {
-        filteredData.addColumn(data.getColumnType(col), data.getColumnLabel(col));
-      }
+          $(`#search-${sheetName}`).on('keyup', function() {
+            table.search(this.value).draw();
+          });
 
-      for (let row = 0; row < data.getNumberOfRows(); row++) {
-        let match = false;
-        for (let col = 0; col < data.getNumberOfColumns(); col++) {
-          const val = data.getValue(row, col);
-          if (val && val.toString().toLowerCase().includes(search)) {
-            match = true;
-            break;
-          }
-        }
-        if (match) {
-          const rowData = [];
-          for (let col = 0; col < data.getNumberOfColumns(); col++) {
-            rowData.push(data.getValue(row, col));
-          }
-          filteredData.addRow(rowData);
-        }
-      }
+          // Chart
+          const ctx = document.getElementById(`chart-${sheetName}`).getContext('2d');
+          const firstCol = rows.map(r => r[0]);
+          const numCol = rows.map(r => parseFloat(r[1]) || 0);
 
-      const table = new google.visualization.Table(document.getElementById(`table-${sheetName}`));
-      table.draw(filteredData, {showRowNumber: true, width: '100%', height: 'auto'});
+          new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: firstCol,
+              datasets: [{
+                label: sheetName,
+                data: numCol,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)'
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false },
+                title: { display: true, text: `กราฟข้อมูล ${sheetName}` }
+              }
+            }
+          });
+        });
     }
   </script>
 </body>
