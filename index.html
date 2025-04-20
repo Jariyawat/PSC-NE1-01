@@ -123,31 +123,59 @@
             table.search(this.value).draw();
           });
 
-          // Chart
+          // สร้าง scatter chart: X = ผู้สมัคร, Y = % Act.คชจ.หน้างาน
           const ctx = document.getElementById(`chart-${sheetName}`).getContext('2d');
-          const labels = rows.map(r => r[2]); // ชื่องาน
-          const dataset1 = rows.map(r => r[5]); // ผู้สมัคร
-          const dataset2 = rows.map(r => parseFloat(r[6]) || 0); // %Act.คชจ.หน้างาน
+          const dataPoints = rows.map((r, i) => ({
+            x: typeof r[5] === 'string' ? r[5] : (r[5] || '') + '',
+            y: parseFloat(r[6]) || 0,
+            label: r[2] || '',
+            index: i
+          }));
 
-          const barChart = new Chart(ctx, {
-            type: 'bar',
+          const scatter = new Chart(ctx, {
+            type: 'scatter',
             data: {
-              labels: labels,
-              datasets: [
-                { label: 'ผู้สมัคร', data: dataset1, backgroundColor: 'rgba(255, 159, 64, 0.6)' },
-                { label: '%Act.คชจ.หน้างาน', data: dataset2, backgroundColor: 'rgba(75, 192, 192, 0.6)' }
-              ]
+              datasets: [{
+                label: '% Act.คชจ.หน้างาน ต่อ ผู้สมัคร',
+                data: dataPoints,
+                parsing: {
+                  xAxisKey: 'x',
+                  yAxisKey: 'y'
+                },
+                backgroundColor: 'rgba(75, 192, 192, 0.6)'
+              }]
             },
             options: {
               responsive: true,
               plugins: {
-                title: { display: true, text: `เปรียบเทียบ ผู้สมัคร กับ % คชจ.หน้างาน (${sheetName})` },
-                legend: { position: 'top' }
+                tooltip: {
+                  callbacks: {
+                    label: function(context) {
+                      const d = context.raw;
+                      return `${d.label} | ${d.x} : ${d.y}`;
+                    }
+                  }
+                },
+                title: {
+                  display: true,
+                  text: 'กราฟความสัมพันธ์ระหว่าง ผู้สมัคร กับ % คชจ.หน้างาน'
+                }
               },
               onClick: (e, elements) => {
                 if (elements.length > 0) {
-                  const index = elements[0].index;
-                  table.search(labels[index]).draw();
+                  const idx = elements[0].index;
+                  const searchKey = dataPoints[idx].label;
+                  table.search(searchKey).draw();
+                }
+              },
+              scales: {
+                x: {
+                  type: 'category',
+                  title: { display: true, text: 'ผู้สมัคร' }
+                },
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: '% คชจ.หน้างาน' }
                 }
               }
             }
