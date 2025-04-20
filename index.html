@@ -20,18 +20,12 @@
       padding: 20px;
       text-align: center;
     }
-    .search-box {
-      margin: 15px 0;
-    }
     table.dataTable td {
       white-space: nowrap;
       font-size: 13px;
     }
     table.dataTable th {
       font-size: 13px;
-    }
-    .dataTables_wrapper .dataTables_scroll {
-      overflow: auto;
     }
     canvas {
       max-width: 100%;
@@ -50,140 +44,153 @@
 </head>
 <body>
   <header>
-    <h1><i class="fas fa-chart-bar"></i> ระบบบริหารจัดงานงานก่อสร้าง ผกร.กรย.ฉ.1</h1>
+    <h1>ระบบบริหารจัดงานงานก่อสร้าง ผกร.กรย.ฉ.1</h1>
   </header>
 
   <div class="container-fluid mt-4">
-    <ul class="nav nav-tabs" id="sheetTabs"></ul>
-    <div id="sheetContents" class="mt-3"></div>
+    <canvas id="chart-Sheet1"></canvas>
+
+    <div class="row mb-2 mt-2">
+      <div class="col-md-4">
+        <label>กรองตามสถานะ:</label>
+        <select id="statusFilter" class="form-select">
+          <option value="">-- แสดงทั้งหมด --</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mb-2">
+      <input type="text" id="search-Sheet1" class="form-control" placeholder="ค้นหาในตารางนี้...">
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table id="table-Sheet1" class="display nowrap" style="width:100%"></table>
+    </div>
   </div>
 
   <script>
     const spreadsheetId = '1JrSoITPYzD3Oy6UBmUCqUD5V5E5alZmR_wiCGpZV2d0';
-    const sheets = ['Sheet1'];
+    const sheetName = 'Sheet1';
+    let table;
+    let allRows = [];
 
-    function init() {
-      const tabs = document.getElementById('sheetTabs');
-      const contents = document.getElementById('sheetContents');
-      sheets.forEach((sheetName, index) => {
-        const tab = document.createElement('li');
-        tab.className = 'nav-item';
-        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" onclick="openSheet('${sheetName}')">${sheetName}</button>`;
-        tabs.appendChild(tab);
-
-        const content = document.createElement('div');
-        content.id = sheetName;
-        content.className = `tabcontent ${index === 0 ? 'active' : ''}`;
-        content.innerHTML = `
-          <canvas id="chart-${sheetName}"></canvas>
-          <div class="search-box">
-            <input type="text" id="search-${sheetName}" class="form-control" placeholder="ค้นหาในตารางนี้...">
-          </div>
-          <div style="overflow-x:auto;">
-            <table id="table-${sheetName}" class="display nowrap" style="width:100%"></table>
-          </div>
-        `;
-        contents.appendChild(content);
-      });
-      openSheet(sheets[0]);
-    }
-
-    function openSheet(sheetName) {
-      document.querySelectorAll('.tabcontent').forEach(el => el.style.display = 'none');
-      document.getElementById(sheetName).style.display = 'block';
-      drawTable(sheetName);
-    }
-
-    function drawTable(sheetName) {
+    function fetchDataAndRender() {
       const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=${sheetName}`;
       fetch(url)
         .then(res => res.text())
         .then(rep => {
           const json = JSON.parse(rep.substring(47).slice(0, -2));
           const cols = json.table.cols.map(col => ({ title: col.label }));
-          const rows = json.table.rows.map(row => row.c.map(cell => cell ? cell.v : ''));
+          allRows = json.table.rows;
 
-          const table = $(`#table-${sheetName}`).DataTable({
-            destroy: true,
-            data: rows,
-            columns: cols,
-            scrollX: true,
-            scrollCollapse: true,
-            fixedHeader: true,
-            fixedColumns: { leftColumns: 2 },
-            responsive: true,
-            createdRow: function(row, data) {
-              if (data[3] === 'REL') {
-                $('td', row).addClass('rel-status');
-              }
-            }
-          });
+          const cleanRows = allRows.map(row =>
+            row.c.map(cell => (cell && cell.v !== null ? cell.v : ""))
+          ).filter(row => row.length > 0 && row[0] !== "");
 
-          $(`#search-${sheetName}`).off().on('keyup', function() {
-            table.search(this.value).draw();
-          });
-
-          // สร้าง scatter chart: X = ผู้สมัคร, Y = % Act.คชจ.หน้างาน
-          const ctx = document.getElementById(`chart-${sheetName}`).getContext('2d');
-          const dataPoints = rows.map((r, i) => ({
-            x: typeof r[5] === 'string' ? r[5] : (r[5] || '') + '',
-            y: parseFloat(r[6]) || 0,
-            label: r[2] || '',
-            index: i
-          }));
-
-          const scatter = new Chart(ctx, {
-            type: 'scatter',
-            data: {
-              datasets: [{
-                label: '% Act.คชจ.หน้างาน ต่อ ผู้สมัคร',
-                data: dataPoints,
-                parsing: {
-                  xAxisKey: 'x',
-                  yAxisKey: 'y'
-                },
-                backgroundColor: 'rgba(75, 192, 192, 0.6)'
-              }]
-            },
-            options: {
-              responsive: true,
-              plugins: {
-                tooltip: {
-                  callbacks: {
-                    label: function(context) {
-                      const d = context.raw;
-                      return `${d.label} | ${d.x} : ${d.y}`;
-                    }
-                  }
-                },
-                title: {
-                  display: true,
-                  text: 'กราฟความสัมพันธ์ระหว่าง ผู้สมัคร กับ % คชจ.หน้างาน'
-                }
-              },
-              onClick: (e, elements) => {
-                if (elements.length > 0) {
-                  const idx = elements[0].index;
-                  const searchKey = dataPoints[idx].label;
-                  table.search(searchKey).draw();
-                }
-              },
-              scales: {
-                x: {
-                  type: 'category',
-                  title: { display: true, text: 'ผู้สมัคร' }
-                },
-                y: {
-                  beginAtZero: true,
-                  title: { display: true, text: '% คชจ.หน้างาน' }
-                }
-              }
-            }
-          });
+          renderTable(cols, cleanRows);
+          renderChart(cleanRows);
         });
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    function renderTable(columns, rows) {
+      table = $('#table-Sheet1').DataTable({
+        destroy: true,
+        data: rows,
+        columns: columns,
+        scrollX: true,
+        scrollCollapse: true,
+        fixedHeader: true,
+        fixedColumns: { leftColumns: 2 },
+        responsive: true,
+        createdRow: function(row, data) {
+          if (data[3] === 'REL') {
+            $('td', row).addClass('rel-status');
+          }
+        }
+      });
+
+      const statusSet = new Set(rows.map(r => r[3]));
+      statusSet.forEach(s => {
+        $('#statusFilter').append(`<option value="${s}">${s}</option>`);
+      });
+
+      $('#statusFilter').on('change', function() {
+        const val = this.value;
+        table.column(3).search(val).draw();
+        const filteredRows = val
+          ? allRows
+              .map(row => row.c.map(cell => (cell && cell.v !== null ? cell.v : "")))
+              .filter(r => r[3] === val)
+          : allRows.map(row => row.c.map(cell => (cell && cell.v !== null ? cell.v : "")));
+        renderChart(filteredRows);
+      });
+
+      $('#search-Sheet1').on('keyup', function() {
+        table.search(this.value).draw();
+      });
+    }
+
+    function renderChart(rows) {
+      const userMap = {};
+      rows.forEach(r => {
+        const name = r[6];
+        const value = parseFloat(r[7]) || 0;
+        if (!userMap[name]) userMap[name] = [];
+        userMap[name].push(value);
+      });
+
+      const labels = [];
+      const data = [];
+      for (const [user, values] of Object.entries(userMap)) {
+        labels.push(user);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        data.push(avg.toFixed(2));
+      }
+
+      const chartCanvas = document.getElementById('chart-Sheet1');
+      if (chartCanvas.chart) {
+        chartCanvas.chart.destroy();
+      }
+
+      chartCanvas.chart = new Chart(chartCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'ค่าเฉลี่ย % คชจ.หน้างาน',
+            data: data,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)'
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'กราฟเฉลี่ย % คชจ.หน้างาน แยกตามผู้สมัคร'
+            }
+          },
+          onClick: (e, elements) => {
+            if (elements.length > 0) {
+              const clickedLabel = labels[elements[0].index];
+              table.search(clickedLabel).draw();
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              title: { display: true, text: '% คชจ.หน้างาน (เฉลี่ย)' }
+            },
+            y: {
+              title: { display: true, text: 'ผู้สมัคร' }
+            }
+          }
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchDataAndRender);
   </script>
 </body>
 </html>
