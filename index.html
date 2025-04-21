@@ -9,7 +9,15 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/colreorder/1.6.2/css/colReorder.dataTables.min.css">
   <style>
+    table.dataTable th, table.dataTable td {
+      white-space: nowrap;
+      min-width: 100px;
+    }
+    .dataTables_wrapper {
+      overflow-x: auto !important;
+    }
     body {
       background-color: #f8f9fa;
       font-family: 'Segoe UI', sans-serif;
@@ -26,6 +34,7 @@
     }
     table.dataTable th {
       font-size: 13px;
+      cursor: move;
     }
     canvas {
       max-width: 100%;
@@ -41,6 +50,15 @@
   <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
   <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
   <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+  <script src="https://cdn.datatables.net/colreorder/1.6.2/js/dataTables.colReorder.min.js"></script>
+
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 </head>
 <body>
   <header>
@@ -64,7 +82,7 @@
     </div>
 
     <div style="overflow-x:auto;">
-      <table id="table-Sheet1" class="display nowrap" style="width:100%"></table>
+      <div style="overflow-x:auto;"><table id="table-Sheet1" class="display nowrap" style="width:100%" title="ลากเมาท์สลับคอลัมป์"></table></div>
     </div>
   </div>
 
@@ -80,7 +98,7 @@
         .then(res => res.text())
         .then(rep => {
           const json = JSON.parse(rep.substring(47).slice(0, -2));
-          const cols = json.table.cols.map(col => ({ title: col.label }));
+          const cols = json.table.cols.map((col, idx) => ({ title: col.label || `คอลัมน์ ${idx + 1}` }));
           allRows = json.table.rows;
 
           const cleanRows = allRows.map(row =>
@@ -98,10 +116,13 @@
         data: rows,
         columns: columns,
         scrollX: true,
-        scrollCollapse: true,
+        scrollCollapse: false,
         fixedHeader: true,
         fixedColumns: { leftColumns: 2 },
         responsive: true,
+        dom: 'Bfrtip',
+        buttons: ['excelHtml5', 'pdfHtml5', 'print'],
+        colReorder: true,
         createdRow: function(row, data) {
           if (data[3] === 'REL') {
             $('td', row).addClass('rel-status');
@@ -165,6 +186,8 @@
         options: {
           indexAxis: 'y',
           responsive: true,
+        dom: 'Bfrtip',
+        buttons: ['excelHtml5', 'pdfHtml5', 'print'],
           plugins: {
             title: {
               display: true,
